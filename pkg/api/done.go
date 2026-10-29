@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -10,38 +11,40 @@ import (
 func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.FormValue("id")
 	if id == "" {
-		writeJSON(w, map[string]string{"error": "id is required"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id is required"})
 		return
 	}
 
 	task, err := db.GetTask(id)
 	if err != nil {
-		writeJSON(w, map[string]string{"error": "task not found"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "task not found"})
 		return
 	}
 
 	if task.Repeat == "" {
 		err = db.DeleteTask(id)
 		if err != nil {
-			writeJSON(w, map[string]string{"error": "failed to delete task"})
+			log.Printf("DB error (delete): %v", err)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 			return
 		}
-		writeJSON(w, map[string]any{})
+		writeJSON(w, http.StatusOK, map[string]any{})
 		return
 	}
 
 	now := time.Now()
 	next, err := NextDate(now, task.Date, task.Repeat)
 	if err != nil {
-		writeJSON(w, map[string]string{"error": err.Error()})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
 	err = db.UpdateDate(id, next)
 	if err != nil {
-		writeJSON(w, map[string]string{"error": "failed to update date"})
+		log.Printf("DB error (update): %v", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 		return
 	}
 
-	writeJSON(w, map[string]any{})
+	writeJSON(w, http.StatusOK, map[string]any{})
 }
